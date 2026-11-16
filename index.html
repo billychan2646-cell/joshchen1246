@@ -204,8 +204,65 @@
       outline-offset: 3px;
     }
 
+    /* 人來人往動畫 */
+    .crowd {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 120px;
+      overflow: hidden;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .crowd::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 6px;
+      background: rgba(0, 0, 0, .35);
+    }
+
+    .walker {
+      position: absolute;
+      bottom: 6px;
+      left: 0;
+      width: 28px;
+      height: 70px;
+      will-change: transform;
+      animation: walk-across linear infinite;
+    }
+
+    .walker svg { width: 100%; height: 100%; overflow: visible; }
+
+    .walker .leg, .walker .arm {
+      transform-box: fill-box;
+      transform-origin: 50% 0;
+      animation: swing .7s ease-in-out infinite alternate;
+    }
+    .walker .leg.b, .walker .arm.b { animation-direction: alternate-reverse; }
+
+    .walker-bob { animation: bob .35s ease-in-out infinite alternate; }
+
+    @keyframes walk-across {
+      from { transform: translateX(var(--from)) scale(var(--scale)); }
+      to   { transform: translateX(var(--to))   scale(var(--scale)); }
+    }
+    @keyframes swing {
+      from { transform: rotate(-28deg); }
+      to   { transform: rotate(28deg); }
+    }
+    @keyframes bob {
+      from { transform: translateY(0); }
+      to   { transform: translateY(-2px); }
+    }
+
     @media (max-width: 767px) {
       .hero-title { font-size: 42px !important; }
+      .crowd { height: 90px; }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -280,6 +337,9 @@
       >
 
       <div class="absolute inset-0 bg-gradient-to-r from-[#1b110c]/90 via-[#25160f]/65 to-[#25160f]/20"></div>
+
+      <!-- 人來人往動畫（由下方 JavaScript 產生行人） -->
+      <div id="crowd" class="crowd" aria-hidden="true"></div>
 
       <div class="container-custom relative w-full py-28">
         <div class="max-w-2xl">
@@ -1096,7 +1156,54 @@
         }
       });
 
+      // 人來人往動畫：隨機產生左右來回走動的行人
+      function initCrowd() {
+        const crowd = $("#crowd");
+        if (!crowd) return;
+        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+        const colors = ["#f5b26c", "#e8d5b7", "#c86b30", "#ffffff", "#9fc5a8", "#e58f8f", "#8fb3e5"];
+        const skins = ["#f1c9a5", "#e0ac84", "#c68a62"];
+        const width = crowd.clientWidth || window.innerWidth;
+        const count = width < 768 ? 8 : 14;
+
+        for (let i = 0; i < count; i++) {
+          const goingRight = Math.random() < 0.5;
+          const scale = 0.7 + Math.random() * 0.5;
+          const duration = 14 + Math.random() * 16;
+          const shirt = colors[Math.floor(Math.random() * colors.length)];
+          const pants = "#2d1f17";
+          const skin = skins[Math.floor(Math.random() * skins.length)];
+
+          const walker = document.createElement("div");
+          walker.className = "walker";
+          walker.style.setProperty("--scale", scale.toFixed(2));
+          walker.style.setProperty("--from", (goingRight ? -60 : width + 60) + "px");
+          walker.style.setProperty("--to", (goingRight ? width + 60 : -60) + "px");
+          walker.style.animationDuration = duration.toFixed(1) + "s";
+          walker.style.animationDelay = (-Math.random() * duration).toFixed(1) + "s";
+          walker.style.transformOrigin = "bottom center";
+          walker.style.opacity = (0.55 + Math.random() * 0.4).toFixed(2);
+
+          // 朝左走的行人水平翻轉
+          const flip = goingRight ? "" : "transform: scaleX(-1);";
+          walker.innerHTML = `
+            <svg viewBox="0 0 28 70" style="${flip}">
+              <g class="walker-bob" style="animation-delay:${(-Math.random()).toFixed(2)}s">
+                <circle cx="14" cy="8" r="6" fill="${skin}"/>
+                <rect x="7" y="15" width="14" height="25" rx="5" fill="${shirt}"/>
+                <rect class="arm" x="3" y="17" width="5" height="19" rx="2.5" fill="${shirt}"/>
+                <rect class="arm b" x="20" y="17" width="5" height="19" rx="2.5" fill="${shirt}"/>
+                <rect class="leg" x="8" y="38" width="6" height="30" rx="3" fill="${pants}"/>
+                <rect class="leg b" x="14" y="38" width="6" height="30" rx="3" fill="${pants}"/>
+              </g>
+            </svg>`;
+          crowd.appendChild(walker);
+        }
+      }
+
       // 初始化
+      initCrowd();
       $("#year").textContent = new Date().getFullYear();
       renderTabs();
       renderMenu();
