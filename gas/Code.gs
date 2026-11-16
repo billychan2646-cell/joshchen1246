@@ -359,7 +359,15 @@ function writeOrder_(ss, order, source) {
 
   const summary = order.lines.map(function (l) { return l.name + ' ×' + l.qty; }).join('、');
 
-  orders.appendRow([
+  // 不用 appendRow：它會把「0966…」這類字串轉成數字而吃掉開頭的 0。
+  // 這裡先把該列格式設成純文字，再寫入值。
+  const row = orders.getLastRow() + 1;
+  const range = orders.getRange(row, 1, 1, ORDER_HEADERS.length);
+  const T = '@';
+  range.setNumberFormats([[
+    T, 'yyyy-mm-dd hh:mm:ss', T, T, T, T, T, T, T, T, '0', '#,##0', '#,##0', '#,##0', T, T
+  ]]);
+  range.setValues([[
     order.orderNumber,
     new Date(),
     '新訂單',
@@ -376,7 +384,7 @@ function writeOrder_(ss, order, source) {
     order.total,
     '',
     source
-  ]);
+  ]]);
 
   const rows = order.lines.map(function (l) {
     return [order.orderNumber, l.id, l.name, l.price, l.qty, l.total];
