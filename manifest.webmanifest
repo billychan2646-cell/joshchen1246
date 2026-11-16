@@ -1,0 +1,24 @@
+{
+  "name": "金煎所 GOLDEN CRISP｜職人鍋貼",
+  "short_name": "金煎所",
+  "description": "職人手作鍋貼，金黃酥脆，溫暖每一餐。線上點餐、冷凍禮盒、門市據點。",
+  "id": "./",
+  "start_url": "./?source=pwa",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "lang": "zh-Hant",
+  "background_color": "#1b110c",
+  "theme_color": "#c86b30",
+  "categories": ["food", "shopping"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "線上點餐", "short_name": "點餐", "url": "./#menu", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "門市據點", "short_name": "門市", "url": "./#locations", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

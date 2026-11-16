@@ -4,7 +4,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#faf5eb">
+  <meta name="theme-color" content="#c86b30">
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="48x48" href="icons/favicon-48.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="金煎所">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="description" content="金煎所 GOLDEN CRISP，職人手作鍋貼，金黃酥脆，溫暖每一餐。">
   <title>金煎所 GOLDEN CRISP｜職人鍋貼</title>
 
@@ -655,7 +665,10 @@
 
       <div class="border-t border-white/20 pt-7 flex flex-col sm:flex-row justify-between gap-4 text-xs text-white/55">
         <p>© <span id="year"></span> GOLDEN CRISP. All rights reserved.</p>
-        <button id="privacyBtn" class="text-left hover:text-white">隱私權政策</button>
+        <div class="flex gap-5">
+          <button id="installBtn" class="hidden text-left text-[#f5b26c] hover:text-white">安裝金煎所 App</button>
+          <button id="privacyBtn" class="text-left hover:text-white">隱私權政策</button>
+        </div>
       </div>
     </div>
   </footer>
@@ -1657,6 +1670,33 @@
           crowd.appendChild(walker);
         }
       }
+
+      // PWA：註冊 Service Worker 與安裝按鈕
+      if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker.register("sw.js").catch(() => {});
+        });
+      }
+
+      let installPrompt = null;
+      window.addEventListener("beforeinstallprompt", event => {
+        event.preventDefault();
+        installPrompt = event;
+        $("#installBtn").classList.remove("hidden");
+      });
+
+      $("#installBtn").addEventListener("click", async () => {
+        if (!installPrompt) return;
+        installPrompt.prompt();
+        await installPrompt.userChoice.catch(() => {});
+        installPrompt = null;
+        $("#installBtn").classList.add("hidden");
+      });
+
+      window.addEventListener("appinstalled", () => {
+        $("#installBtn").classList.add("hidden");
+        showToast("已安裝金煎所 App！");
+      });
 
       // 初始化
       if (!initCrowd3D()) initCrowd();
