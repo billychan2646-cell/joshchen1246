@@ -142,7 +142,28 @@ function onOpen() {
 /* ───────────── 網頁應用程式 ───────────── */
 
 function doGet(e) {
-  return json_({ ok: true, service: 'golden-crisp-orders', time: nowText_() });
+  // 健康檢查：直接用瀏覽器開網址即可看到初始化狀態（不會洩漏訂單內容）
+  const out = { ok: true, service: 'golden-crisp-orders', time: nowText_() };
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (!ss) {
+      out.ready = false;
+      out.problem = '此指令碼沒有綁定試算表，請從試算表的「擴充功能 → Apps Script」開啟';
+    } else {
+      const missing = Object.keys(CONFIG.SHEET)
+        .map(function (k) { return CONFIG.SHEET[k]; })
+        .filter(function (name) { return !ss.getSheetByName(name); });
+      const menuCount = Object.keys(readMenu_(ss)).length;
+      out.ready = missing.length === 0 && menuCount > 0;
+      out.menuCount = menuCount;
+      if (missing.length) out.missingSheets = missing;
+      if (!out.ready) out.problem = '尚未完成初始化，請在 Apps Script 執行 setup()';
+    }
+  } catch (err) {
+    out.ready = false;
+    out.problem = String(err && err.message || err);
+  }
+  return json_(out);
 }
 
 function doPost(e) {
@@ -185,6 +206,9 @@ function doPost(e) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const menu = readMenu_(ss);
     const settings = readSettings_(ss);
+    if (!Object.keys(menu).length) {
+      return json_(fail_('NOT_SETUP', '訂單系統尚未完成初始化，請聯絡店家'));
+    }
 
     const built = buildOrder_(body, menu, settings);
     if (!built.ok) return json_(built);
