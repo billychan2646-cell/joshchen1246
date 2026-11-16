@@ -216,6 +216,16 @@
       z-index: 1;
     }
 
+    .crowd3d {
+      position: absolute;
+      left: 0;
+      bottom: 0;
+      width: 100%;
+      height: 300px;
+      pointer-events: none;
+      z-index: 1;
+    }
+
     .crowd::after {
       content: "";
       position: absolute;
@@ -263,6 +273,7 @@
     @media (max-width: 767px) {
       .hero-title { font-size: 42px !important; }
       .crowd { height: 120px; }
+      .crowd3d { height: 230px; }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -339,6 +350,7 @@
       <div class="absolute inset-0 bg-gradient-to-r from-[#1b110c]/90 via-[#25160f]/65 to-[#25160f]/20"></div>
 
       <!-- 人來人往動畫（由下方 JavaScript 產生行人） -->
+      <canvas id="crowd3d" class="crowd3d" aria-hidden="true"></canvas>
       <div id="crowd" class="crowd" aria-hidden="true"></div>
 
       <div class="container-custom relative w-full py-28">
@@ -755,6 +767,9 @@
     aria-live="polite">
   </div>
 
+  <!-- 3D 人來人往動畫使用 three.js；載入失敗時自動改用 2D 版本 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
   <!-- JAVASCRIPT -->
   <script>
     (() => {
@@ -1156,7 +1171,358 @@
         }
       });
 
-      // 人來人往動畫：隨機產生左右來回走動的行人
+      // 3D 人來人往：街道、店面，行人路過或走進店裡再走出來
+      function initCrowd3D() {
+        const canvas = $("#crowd3d");
+        if (!canvas || !window.THREE) return false;
+
+        let renderer;
+        try {
+          renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+        } catch (error) {
+          return false;
+        }
+
+        renderer.setClearColor(0x000000, 0);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(35, 4, 0.1, 100);
+        camera.position.set(0, 3.6, 11);
+        camera.lookAt(0, 1.5, 0);
+
+        // 燈光
+        scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+        const sun = new THREE.DirectionalLight(0xfff1dd, 0.9);
+        sun.position.set(-6, 10, 8);
+        scene.add(sun);
+        const doorLight = new THREE.PointLight(0xffb36b, 1.4, 9);
+        scene.add(doorLight);
+
+        // 地面：人行道與馬路
+        const sidewalk = new THREE.Mesh(
+          new THREE.PlaneGeometry(240, 6),
+          new THREE.MeshStandardMaterial({ color: 0x4a382c, roughness: 1 })
+        );
+        sidewalk.rotation.x = -Math.PI / 2;
+        sidewalk.position.set(0, 0, 2);
+        scene.add(sidewalk);
+
+        const road = new THREE.Mesh(
+          new THREE.PlaneGeometry(240, 12),
+          new THREE.MeshStandardMaterial({ color: 0x241b16, roughness: 1 })
+        );
+        road.rotation.x = -Math.PI / 2;
+        road.position.set(0, -0.01, 11);
+        scene.add(road);
+
+        const curb = new THREE.Mesh(
+          new THREE.BoxGeometry(240, 0.18, 0.25),
+          new THREE.MeshStandardMaterial({ color: 0x8a7767 })
+        );
+        curb.position.set(0, 0.05, 5.1);
+        scene.add(curb);
+
+        const laneMaterial = new THREE.MeshBasicMaterial({ color: 0xe9dcc8 });
+        for (let x = -120; x < 120; x += 4) {
+          const dash = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.14), laneMaterial);
+          dash.rotation.x = -Math.PI / 2;
+          dash.position.set(x, 0, 10);
+          scene.add(dash);
+        }
+
+        // 後方街屋牆面
+        const wall = new THREE.Mesh(
+          new THREE.BoxGeometry(240, 3.2, 1),
+          new THREE.MeshStandardMaterial({ color: 0x2a1c14, roughness: 1 })
+        );
+        wall.position.set(0, 1.6, -2.4);
+        scene.add(wall);
+
+        const windowMaterial = new THREE.MeshBasicMaterial({ color: 0xf3c58a });
+        for (let x = -60; x <= 60; x += 7) {
+          if (Math.random() < 0.55) {
+            const win = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.1), windowMaterial);
+            win.position.set(x, 1.9, -1.88);
+            scene.add(win);
+          }
+        }
+
+        // 店面：金煎所
+        const shop = new THREE.Group();
+        scene.add(shop);
+
+        const shopBody = new THREE.Mesh(
+          new THREE.BoxGeometry(8, 4.4, 2.6),
+          new THREE.MeshStandardMaterial({ color: 0xf1e3cf, roughness: 0.9 })
+        );
+        shopBody.position.set(0, 2.2, -2.3);
+        shop.add(shopBody);
+
+        const door = new THREE.Mesh(
+          new THREE.PlaneGeometry(1.7, 2.8),
+          new THREE.MeshBasicMaterial({ color: 0xffa95a })
+        );
+        door.position.set(0, 1.4, -0.98);
+        shop.add(door);
+
+        [-2.6, 2.6].forEach(x => {
+          const shopWindow = new THREE.Mesh(
+            new THREE.PlaneGeometry(2, 1.7),
+            new THREE.MeshBasicMaterial({ color: 0xffd9a0 })
+          );
+          shopWindow.position.set(x, 1.8, -0.98);
+          shop.add(shopWindow);
+        });
+
+        const awning = new THREE.Mesh(
+          new THREE.BoxGeometry(8.6, 0.25, 1.7),
+          new THREE.MeshStandardMaterial({ color: 0xc86b30 })
+        );
+        awning.position.set(0, 3.3, -0.2);
+        awning.rotation.x = 0.28;
+        shop.add(awning);
+
+        const signCanvas = document.createElement("canvas");
+        signCanvas.width = 512;
+        signCanvas.height = 160;
+        const signTexture = new THREE.CanvasTexture(signCanvas);
+        function drawSign() {
+          const ctx = signCanvas.getContext("2d");
+          ctx.fillStyle = "#38281e";
+          ctx.fillRect(0, 0, 512, 160);
+          ctx.fillStyle = "#f5b26c";
+          ctx.font = "bold 88px 'Noto Serif TC', serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText("金煎所", 256, 70);
+          ctx.font = "24px sans-serif";
+          ctx.fillStyle = "#e3b38d";
+          ctx.fillText("GOLDEN CRISP", 256, 134);
+          signTexture.needsUpdate = true;
+        }
+        drawSign();
+        if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawSign);
+
+        const sign = new THREE.Mesh(
+          new THREE.PlaneGeometry(4.2, 1.31),
+          new THREE.MeshBasicMaterial({ map: signTexture })
+        );
+        sign.position.set(0, 4.0, -0.98);
+        shop.add(sign);
+
+        // 行人模型（低多邊形）
+        const geo = {
+          leg: new THREE.BoxGeometry(0.2, 0.85, 0.24).translate(0, -0.425, 0),
+          arm: new THREE.BoxGeometry(0.14, 0.62, 0.16).translate(0, -0.31, 0),
+          torso: new THREE.BoxGeometry(0.56, 0.72, 0.32),
+          head: new THREE.SphereGeometry(0.2, 12, 10),
+          hair: new THREE.SphereGeometry(0.215, 12, 10, 0, Math.PI * 2, 0, Math.PI / 1.9),
+          shadow: new THREE.CircleGeometry(0.4, 14)
+        };
+        const shirtColors = [0xf5b26c, 0xe8d5b7, 0xc86b30, 0xffffff, 0x9fc5a8, 0xe58f8f, 0x8fb3e5, 0xb59be0];
+        const skinColors = [0xf1c9a5, 0xe0ac84, 0xc68a62, 0x8d5a3b];
+        const hairColors = [0x1c1410, 0x3b2418, 0x6b4a2b, 0x222222];
+        const pick = list => list[Math.floor(Math.random() * list.length)];
+        const shadowMaterial = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.28 });
+
+        function createPerson() {
+          const root = new THREE.Group();
+          const body = new THREE.Group();
+          root.add(body);
+
+          const shirt = new THREE.MeshStandardMaterial({ color: pick(shirtColors), roughness: 0.8 });
+          const pants = new THREE.MeshStandardMaterial({ color: pick([0x2d1f17, 0x24303f, 0x3a3a3a]), roughness: 0.9 });
+          const skin = new THREE.MeshStandardMaterial({ color: pick(skinColors), roughness: 0.7 });
+          const hair = new THREE.MeshStandardMaterial({ color: pick(hairColors), roughness: 0.9 });
+
+          const torso = new THREE.Mesh(geo.torso, shirt);
+          torso.position.y = 1.2;
+          body.add(torso);
+
+          const head = new THREE.Mesh(geo.head, skin);
+          head.position.y = 1.78;
+          body.add(head);
+
+          const hairCap = new THREE.Mesh(geo.hair, hair);
+          hairCap.position.y = 1.8;
+          hairCap.rotation.x = -0.25;
+          body.add(hairCap);
+
+          const legL = new THREE.Mesh(geo.leg, pants);
+          legL.position.set(-0.14, 0.85, 0);
+          const legR = new THREE.Mesh(geo.leg, pants);
+          legR.position.set(0.14, 0.85, 0);
+          const armL = new THREE.Mesh(geo.arm, shirt);
+          armL.position.set(-0.38, 1.52, 0);
+          const armR = new THREE.Mesh(geo.arm, shirt);
+          armR.position.set(0.38, 1.52, 0);
+          body.add(legL, legR, armL, armR);
+
+          const shadow = new THREE.Mesh(geo.shadow, shadowMaterial);
+          shadow.rotation.x = -Math.PI / 2;
+          shadow.position.y = 0.02;
+          root.add(shadow);
+
+          const scale = 0.9 + Math.random() * 0.25;
+          root.scale.setScalar(scale);
+          scene.add(root);
+
+          return { root, body, legL, legR, armL, armR, phase: Math.random() * 6, speed: 1, path: [], wait: 0 };
+        }
+
+        let halfWidth = 16;
+        let doorX = 6;
+
+        function edgeX(side) { return side * (halfWidth + 3); }
+
+        function assignRoute(person, first) {
+          const lane = 0.6 + Math.random() * 3.6;
+          const side = Math.random() < 0.5 ? -1 : 1;
+          const willEnter = Math.random() < 0.5;
+          person.speed = 1.6 + Math.random() * 1.4;
+          person.wait = 0;
+          person.hidden = false;
+          person.root.visible = true;
+
+          const startX = first
+            ? (Math.random() * 2 - 1) * halfWidth
+            : edgeX(side);
+          person.root.position.set(startX, 0, lane);
+
+          if (willEnter) {
+            person.path = [
+              { door: true, z: lane },
+              { door: true, z: -0.7, hide: true },
+              { door: true, z: lane, exitAfterWait: true },
+              { x: edgeX(Math.random() < 0.5 ? -1 : 1), z: 0.6 + Math.random() * 3.6 }
+            ];
+            // 若起點已在店門另一側，仍然走向店門
+          } else {
+            person.path = [{ x: edgeX(-side), z: lane + (Math.random() - 0.5) * 0.8 }];
+          }
+        }
+
+        const people = [];
+        const total = () => (canvas.clientWidth < 700 ? 8 : 14);
+
+        function ensurePeople() {
+          while (people.length < total()) {
+            const person = createPerson();
+            assignRoute(person, true);
+            people.push(person);
+          }
+        }
+
+        function resize() {
+          const w = canvas.clientWidth || 600;
+          const h = canvas.clientHeight || 220;
+          renderer.setSize(w, h, false);
+          camera.aspect = w / h;
+          camera.updateProjectionMatrix();
+
+          const dist = camera.position.distanceTo(new THREE.Vector3(0, 1.5, 0));
+          halfWidth = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * dist * camera.aspect;
+
+          const shopScale = Math.min(1, halfWidth / 11);
+          shop.scale.setScalar(shopScale);
+          doorX = Math.min(halfWidth * 0.55, halfWidth - 3 * shopScale);
+          shop.position.x = doorX;
+          doorLight.position.set(doorX, 1.6, -0.2);
+          ensurePeople();
+        }
+
+        function stepPerson(person, dt) {
+          if (person.hidden) {
+            person.wait -= dt;
+            if (person.wait <= 0) {
+              person.hidden = false;
+              person.root.visible = true;
+              person.root.position.x = doorX;
+              person.root.position.z = -0.7;
+            }
+            return;
+          }
+
+          const wp = person.path[0];
+          if (!wp) {
+            assignRoute(person, false);
+            return;
+          }
+
+          const targetX = wp.door ? doorX : wp.x;
+          const dx = targetX - person.root.position.x;
+          const dz = wp.z - person.root.position.z;
+          const distance = Math.hypot(dx, dz);
+          const move = person.speed * dt;
+
+          if (distance <= move) {
+            person.root.position.x = targetX;
+            person.root.position.z = wp.z;
+            person.path.shift();
+            if (wp.hide) {
+              person.hidden = true;
+              person.root.visible = false;
+              person.wait = 2 + Math.random() * 3;
+              doorLight.intensity = 2.4;
+            }
+            return;
+          }
+
+          person.root.position.x += (dx / distance) * move;
+          person.root.position.z += (dz / distance) * move;
+
+          // 轉向行進方向（平滑）
+          const targetAngle = Math.atan2(dx, dz);
+          let diff = targetAngle - person.root.rotation.y;
+          diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+          person.root.rotation.y += diff * Math.min(1, dt * 8);
+
+          // 走路動作
+          person.phase += dt * person.speed * 4.2;
+          const swing = Math.sin(person.phase);
+          person.legL.rotation.x = swing * 0.7;
+          person.legR.rotation.x = -swing * 0.7;
+          person.armL.rotation.x = -swing * 0.6;
+          person.armR.rotation.x = swing * 0.6;
+          person.body.position.y = Math.abs(swing) * 0.05;
+        }
+
+        let last = performance.now();
+        let visible = true;
+
+        function frame(now) {
+          requestAnimationFrame(frame);
+          if (!visible || document.hidden) {
+            last = now;
+            return;
+          }
+          const dt = Math.min(0.05, (now - last) / 1000);
+          last = now;
+
+          people.forEach(person => stepPerson(person, dt));
+          doorLight.intensity += (1.4 - doorLight.intensity) * Math.min(1, dt * 3);
+          // 遠的先畫，避免人物與地面互相遮擋時順序錯亂
+          renderer.render(scene, camera);
+        }
+
+        if ("IntersectionObserver" in window) {
+          new IntersectionObserver(entries => {
+            visible = entries[0].isIntersecting;
+          }).observe(canvas);
+        }
+
+        window.addEventListener("resize", resize);
+        resize();
+        requestAnimationFrame(frame);
+
+        // 3D 成功啟動後隱藏 2D 備用版本
+        const flat = $("#crowd");
+        if (flat) flat.style.display = "none";
+        return true;
+      }
+
+      // 人來人往動畫（2D 備用版）：隨機產生左右來回走動的行人
       function initCrowd() {
         const crowd = $("#crowd");
         if (!crowd) return;
@@ -1201,7 +1567,7 @@
       }
 
       // 初始化
-      initCrowd();
+      if (!initCrowd3D()) initCrowd();
       $("#year").textContent = new Date().getFullYear();
       renderTabs();
       renderMenu();
