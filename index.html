@@ -210,7 +210,7 @@
       left: 0;
       right: 0;
       bottom: 0;
-      height: 120px;
+      height: 150px;
       overflow: hidden;
       pointer-events: none;
       z-index: 1;
@@ -230,8 +230,8 @@
       position: absolute;
       bottom: 6px;
       left: 0;
-      width: 28px;
-      height: 70px;
+      width: 36px;
+      height: 90px;
       will-change: transform;
       animation: walk-across linear infinite;
     }
@@ -262,12 +262,12 @@
 
     @media (max-width: 767px) {
       .hero-title { font-size: 42px !important; }
-      .crowd { height: 90px; }
+      .crowd { height: 120px; }
     }
 
     @media (prefers-reduced-motion: reduce) {
       html { scroll-behavior: auto; }
-      *, *::before, *::after {
+      *:not(.crowd):not(.crowd *), *::before, *::after {
         transition-duration: .01ms !important;
         animation-duration: .01ms !important;
       }
@@ -1160,8 +1160,6 @@
       function initCrowd() {
         const crowd = $("#crowd");
         if (!crowd) return;
-        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-
         const colors = ["#f5b26c", "#e8d5b7", "#c86b30", "#ffffff", "#9fc5a8", "#e58f8f", "#8fb3e5"];
         const skins = ["#f1c9a5", "#e0ac84", "#c68a62"];
         const width = crowd.clientWidth || window.innerWidth;
@@ -1169,7 +1167,7 @@
 
         for (let i = 0; i < count; i++) {
           const goingRight = Math.random() < 0.5;
-          const scale = 0.7 + Math.random() * 0.5;
+          const scale = 0.8 + Math.random() * 0.6;
           const duration = 14 + Math.random() * 16;
           const shirt = colors[Math.floor(Math.random() * colors.length)];
           const pants = "#2d1f17";
@@ -1183,7 +1181,7 @@
           walker.style.animationDuration = duration.toFixed(1) + "s";
           walker.style.animationDelay = (-Math.random() * duration).toFixed(1) + "s";
           walker.style.transformOrigin = "bottom center";
-          walker.style.opacity = (0.55 + Math.random() * 0.4).toFixed(2);
+          walker.style.opacity = (0.8 + Math.random() * 0.2).toFixed(2);
 
           // 朝左走的行人水平翻轉
           const flip = goingRight ? "" : "transform: scaleX(-1);";
