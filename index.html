@@ -216,6 +216,14 @@
       z-index: 1;
     }
 
+    .night-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to bottom, #060c24, #1a2250);
+      opacity: 0;
+      pointer-events: none;
+    }
+
     .crowd3d {
       position: absolute;
       left: 0;
@@ -350,6 +358,7 @@
       <div class="absolute inset-0 bg-gradient-to-r from-[#1b110c]/90 via-[#25160f]/65 to-[#25160f]/20"></div>
 
       <!-- 人來人往動畫（由下方 JavaScript 產生行人） -->
+      <div id="nightOverlay" class="night-overlay" aria-hidden="true"></div>
       <canvas id="crowd3d" class="crowd3d" aria-hidden="true"></canvas>
       <div id="crowd" class="crowd" aria-hidden="true"></div>
 
@@ -1192,7 +1201,8 @@
         camera.lookAt(0, 1.5, 0);
 
         // 燈光
-        scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+        const ambient = new THREE.AmbientLight(0xffffff, 0.75);
+        scene.add(ambient);
         const sun = new THREE.DirectionalLight(0xfff1dd, 0.9);
         sun.position.set(-6, 10, 8);
         scene.add(sun);
@@ -1259,9 +1269,11 @@
         shopBody.position.set(0, 2.2, -2.3);
         shop.add(shopBody);
 
+        const doorMaterial = new THREE.MeshBasicMaterial({ color: 0xffa95a });
+        const shopWindowMaterial = new THREE.MeshBasicMaterial({ color: 0xffd9a0 });
         const door = new THREE.Mesh(
           new THREE.PlaneGeometry(1.7, 2.8),
-          new THREE.MeshBasicMaterial({ color: 0xffa95a })
+          doorMaterial
         );
         door.position.set(0, 1.4, -0.98);
         shop.add(door);
@@ -1269,7 +1281,7 @@
         [-2.6, 2.6].forEach(x => {
           const shopWindow = new THREE.Mesh(
             new THREE.PlaneGeometry(2, 1.7),
-            new THREE.MeshBasicMaterial({ color: 0xffd9a0 })
+            shopWindowMaterial
           );
           shopWindow.position.set(x, 1.8, -0.98);
           shop.add(shopWindow);
@@ -1310,6 +1322,34 @@
         );
         sign.position.set(0, 4.0, -0.98);
         shop.add(sign);
+
+        // 路燈：夜晚才會亮
+        const lampMaterial = new THREE.MeshBasicMaterial({ color: 0x7a6a58 });
+        const lampGlowMaterial = new THREE.MeshBasicMaterial({
+          color: 0xffd27a, transparent: true, opacity: 0, depthWrite: false
+        });
+        const postMaterial = new THREE.MeshStandardMaterial({ color: 0x2b2420 });
+        for (let x = -63; x <= 63; x += 9) {
+          const post = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 2.8, 8), postMaterial);
+          post.position.set(x, 1.4, 4.8);
+          scene.add(post);
+
+          const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.17, 10, 8), lampMaterial);
+          bulb.position.set(x, 2.9, 4.8);
+          scene.add(bulb);
+
+          const glow = new THREE.Mesh(new THREE.CircleGeometry(2.2, 20), lampGlowMaterial);
+          glow.rotation.x = -Math.PI / 2;
+          glow.position.set(x, 0.03, 3.6);
+          scene.add(glow);
+        }
+
+        // 外帶盒（走出店門的人會提著）
+        const boxMaterial = new THREE.MeshStandardMaterial({ color: 0xd9a566, roughness: 0.9 });
+        const bandMaterial = new THREE.MeshStandardMaterial({ color: 0xc23b22, roughness: 0.8 });
+        const boxGeo = new THREE.BoxGeometry(0.34, 0.24, 0.26);
+        const bandGeo = new THREE.BoxGeometry(0.355, 0.06, 0.275);
+        const handleGeo = new THREE.TorusGeometry(0.07, 0.012, 6, 10, Math.PI);
 
         // 行人模型（低多邊形）
         const geo = {
@@ -1359,6 +1399,18 @@
           armR.position.set(0.38, 1.52, 0);
           body.add(legL, legR, armL, armR);
 
+          const takeaway = new THREE.Group();
+          takeaway.add(new THREE.Mesh(boxGeo, boxMaterial));
+          const band = new THREE.Mesh(bandGeo, bandMaterial);
+          band.position.y = 0.02;
+          takeaway.add(band);
+          const handle = new THREE.Mesh(handleGeo, bandMaterial);
+          handle.position.y = 0.12;
+          takeaway.add(handle);
+          takeaway.position.set(0.02, -0.7, 0.14);
+          takeaway.visible = false;
+          armR.add(takeaway);
+
           const shadow = new THREE.Mesh(geo.shadow, shadowMaterial);
           shadow.rotation.x = -Math.PI / 2;
           shadow.position.y = 0.02;
@@ -1368,7 +1420,7 @@
           root.scale.setScalar(scale);
           scene.add(root);
 
-          return { root, body, legL, legR, armL, armR, phase: Math.random() * 6, speed: 1, path: [], wait: 0 };
+          return { root, body, legL, legR, armL, armR, takeaway, phase: Math.random() * 6, speed: 1, path: [], wait: 0 };
         }
 
         let halfWidth = 16;
@@ -1379,11 +1431,12 @@
         function assignRoute(person, first) {
           const lane = 0.6 + Math.random() * 3.6;
           const side = Math.random() < 0.5 ? -1 : 1;
-          const willEnter = Math.random() < 0.5;
+          const willEnter = Math.random() < 0.8;
           person.speed = 1.6 + Math.random() * 1.4;
           person.wait = 0;
           person.hidden = false;
           person.root.visible = true;
+          person.takeaway.visible = false;
 
           const startX = first
             ? (Math.random() * 2 - 1) * halfWidth
@@ -1440,6 +1493,7 @@
               person.root.visible = true;
               person.root.position.x = doorX;
               person.root.position.z = -0.7;
+              person.takeaway.visible = true;
             }
             return;
           }
@@ -1463,8 +1517,8 @@
             if (wp.hide) {
               person.hidden = true;
               person.root.visible = false;
-              person.wait = 2 + Math.random() * 3;
-              doorLight.intensity = 2.4;
+              person.wait = 1.5 + Math.random() * 2.5;
+              doorFlash = 1.2;
             }
             return;
           }
@@ -1484,10 +1538,46 @@
           person.legL.rotation.x = swing * 0.7;
           person.legR.rotation.x = -swing * 0.7;
           person.armL.rotation.x = -swing * 0.6;
-          person.armR.rotation.x = swing * 0.6;
+          person.armR.rotation.x = person.takeaway.visible ? -0.9 : swing * 0.6;
           person.body.position.y = Math.abs(swing) * 0.05;
         }
 
+        // 日夜循環：約 48 秒一輪
+        const nightOverlay = $("#nightOverlay");
+        const dayAmbient = new THREE.Color(0xffffff);
+        const nightAmbient = new THREE.Color(0x5566aa);
+        const daySun = new THREE.Color(0xfff1dd);
+        const nightSun = new THREE.Color(0x7f93ff);
+        const dayDoor = new THREE.Color(0xe0a86a);
+        const nightDoor = new THREE.Color(0xffb04a);
+        const dayWindow = new THREE.Color(0xe8cfa6);
+        const nightWindow = new THREE.Color(0xffd27a);
+        const dayLamp = new THREE.Color(0x7a6a58);
+        const nightLamp = new THREE.Color(0xffe08f);
+        let doorFlash = 0;
+        const CYCLE = 48;
+
+        function nightAt(seconds) {
+          const wave = 0.5 - 0.5 * Math.cos((seconds / CYCLE) * Math.PI * 2);
+          const t = Math.min(1, Math.max(0, (wave - 0.25) / 0.5));
+          return t * t * (3 - 2 * t);
+        }
+
+        function applyLighting(night) {
+          ambient.color.copy(dayAmbient).lerp(nightAmbient, night);
+          ambient.intensity = 0.75 - 0.4 * night;
+          sun.color.copy(daySun).lerp(nightSun, night);
+          sun.intensity = 0.9 - 0.7 * night;
+          doorMaterial.color.copy(dayDoor).lerp(nightDoor, night);
+          shopWindowMaterial.color.copy(dayWindow).lerp(nightWindow, night);
+          windowMaterial.color.copy(dayWindow).lerp(nightWindow, night);
+          lampMaterial.color.copy(dayLamp).lerp(nightLamp, night);
+          lampGlowMaterial.opacity = 0.3 * night;
+          doorBase = 1.2 + 2.4 * night;
+          if (nightOverlay) nightOverlay.style.opacity = (0.55 * night).toFixed(3);
+        }
+
+        let doorBase = 1.4;
         let last = performance.now();
         let visible = true;
 
@@ -1501,7 +1591,9 @@
           last = now;
 
           people.forEach(person => stepPerson(person, dt));
-          doorLight.intensity += (1.4 - doorLight.intensity) * Math.min(1, dt * 3);
+          doorFlash = Math.max(0, doorFlash - dt * 2);
+          applyLighting(nightAt(now / 1000));
+          doorLight.intensity = doorBase + doorFlash;
           // 遠的先畫，避免人物與地面互相遮擋時順序錯亂
           renderer.render(scene, camera);
         }
