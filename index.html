@@ -289,6 +289,12 @@
     }
 
     @media (max-width: 767px) {
+      /* 手機版：海報放大並對準右側實拍鍋貼，避開海報上的標題文字 */
+      .hero-photo {
+        object-position: 100% 58%;
+        transform: scale(1.4);
+        transform-origin: 100% 58%;
+      }
       .hero-title { font-size: 42px !important; }
       .crowd { height: 120px; }
       .crowd3d { height: 230px; }
@@ -361,7 +367,7 @@
       <img
         src="https://i.postimg.cc/j2YmMLV1/Chat-GPT-Image-2026nian8yue9ri-xia-wu06-20-57.png"
         alt="金黃酥脆的手工餃子"
-        class="absolute inset-0 photo"
+        class="absolute inset-0 photo hero-photo"
         fetchpriority="high"
       >
 
@@ -372,7 +378,7 @@
       <canvas id="crowd3d" class="crowd3d" aria-hidden="true"></canvas>
       <div id="crowd" class="crowd" aria-hidden="true"></div>
 
-      <div class="container-custom relative w-full py-28">
+      <div class="container-custom relative z-[2] w-full pt-24 pb-[250px] md:pt-28 md:pb-[190px]">
         <div class="max-w-2xl">
           <span class="inline-block border border-white/50 rounded-full px-4 py-2 text-sm tracking-widest mb-7">
             一口金黃・滿心溫暖
@@ -1492,7 +1498,7 @@
 
           const shopScale = Math.min(1, halfWidth / 11);
           shop.scale.setScalar(shopScale);
-          doorX = Math.min(halfWidth * 0.55, halfWidth - 3 * shopScale);
+          doorX = Math.min(halfWidth * 0.5, halfWidth - 4.2 * shopScale);
           shop.position.x = doorX;
           doorLight.position.set(doorX, 1.6, -0.2);
           ensurePeople();
