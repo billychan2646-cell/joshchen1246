@@ -88,6 +88,25 @@
       transform: translateY(-2px);
     }
 
+    #booking-btn {
+      position: fixed;
+      right: max(20px, env(safe-area-inset-right));
+      bottom: calc(20px + env(safe-area-inset-bottom));
+      z-index: 40;
+      min-height: 52px;
+      background: var(--orange);
+      color: #fff;
+      text-decoration: none;
+      box-shadow: 0 6px 24px rgba(56, 40, 30, .28);
+    }
+
+    #booking-btn:focus-visible {
+      outline: 3px solid var(--brown);
+      outline-offset: 4px;
+    }
+
+    #booking-btn svg { width: 22px; height: 22px; flex-shrink: 0; }
+
     .btn-outline {
       border: 1px solid #b8a899;
     }
@@ -1087,5 +1106,15 @@
     })();
   </script>
 
+  <a id="booking-btn" class="btn btn-primary"
+     href="https://calendar.app.google/CYWKhfwj27fmeX7MA"
+     target="_blank" rel="noopener noreferrer"
+     aria-label="立即預約（在新分頁開啟 Google 日曆）">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <rect x="3" y="5" width="18" height="16" rx="2"/>
+      <path d="M16 3v4M8 3v4M3 11h18m-13 5 3 3 5-5"/>
+    </svg>
+    立即預約
+  </a>
 </body>
 </html>
