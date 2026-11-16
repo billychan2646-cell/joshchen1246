@@ -582,7 +582,7 @@
               如何線上點餐？
               <i data-lucide="chevron-down" class="faq-chevron w-5 shrink-0 transition-transform"></i>
             </summary>
-            <p class="text-[#786b5f] leading-8 mt-4">
+            <p id="faqOrder" class="text-[#786b5f] leading-8 mt-4">
               選擇菜單分類、加入購物車並填寫訂單資訊即可體驗模擬結帳。本展示網站不會將訂單傳送至門市。
             </p>
           </details>
@@ -602,7 +602,7 @@
               可以選擇外帶或宅配嗎？
               <i data-lucide="chevron-down" class="faq-chevron w-5 shrink-0 transition-transform"></i>
             </summary>
-            <p class="text-[#786b5f] leading-8 mt-4">
+            <p id="faqMethod" class="text-[#786b5f] leading-8 mt-4">
               模擬結帳支援內用、外帶及宅配選項。目前尚未提供真實物流、運費計算或付款服務。
             </p>
           </details>
@@ -712,7 +712,7 @@
 
   <!-- CHECKOUT MODAL -->
   <div id="checkoutOverlay" class="hidden fixed inset-0 z-[70] bg-black/65 p-4 items-center justify-center overflow-y-auto">
-    <div class="bg-[#faf5eb] rounded-[24px] w-full max-w-xl max-h-[92vh] overflow-y-auto shadow-2xl my-auto" role="dialog" aria-modal="true" aria-label="模擬結帳">
+    <div class="bg-[#faf5eb] rounded-[24px] w-full max-w-xl max-h-[92vh] overflow-y-auto shadow-2xl my-auto" role="dialog" aria-modal="true" aria-label="結帳" id="checkoutDialog">
       <div class="p-6 border-b flex justify-between items-center">
         <h2 class="serif text-2xl font-bold">確認訂單</h2>
         <button id="checkoutClose" aria-label="關閉結帳視窗">
@@ -767,11 +767,18 @@
             <textarea id="orderNote" class="input" rows="2" placeholder="其他需求（選填）"></textarea>
           </div>
 
-          <p class="text-xs text-[#786b5f] leading-6">
+          <!-- 機器人陷阱：真人看不到，請勿填寫 -->
+          <div style="position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden" aria-hidden="true">
+            <label>網站<input type="text" id="hpField" tabindex="-1" autocomplete="off"></label>
+          </div>
+
+          <p id="checkoutNotice" class="text-xs text-[#786b5f] leading-6">
             本站為前端展示。提交後僅顯示模擬成功畫面，不會實際送單、扣款或儲存聯絡資料。
           </p>
 
-          <button type="submit" class="btn btn-primary w-full">確認建立模擬訂單</button>
+          <p id="checkoutError" class="hidden text-sm text-[#b3261e] font-semibold" role="alert"></p>
+
+          <button id="checkoutSubmit" type="submit" class="btn btn-primary w-full">確認建立模擬訂單</button>
         </form>
       </div>
 
@@ -780,8 +787,9 @@
           <i data-lucide="check-circle-2" class="w-11 h-11 text-green-700"></i>
         </div>
         <h3 class="text-2xl font-bold mb-3">訂單已建立！</h3>
-        <p class="text-[#786b5f] mb-2">模擬訂單編號：<span id="orderNumber"></span></p>
-        <p class="text-sm text-[#786b5f] mb-7">這是展示用確認畫面，沒有實際下單或付款。</p>
+        <p class="text-[#786b5f] mb-2"><span id="orderNumberLabel">模擬訂單編號</span>：<span id="orderNumber" class="font-bold"></span></p>
+        <p id="orderTotalLine" class="hidden text-[#786b5f] mb-2">訂單金額：<span id="orderTotal" class="font-bold text-[#c86b30]"></span></p>
+        <p id="successNote" class="text-sm text-[#786b5f] mb-7">這是展示用確認畫面，沒有實際下單或付款。</p>
         <button id="successClose" class="btn btn-primary">返回首頁</button>
       </div>
     </div>
@@ -802,6 +810,11 @@
   <script>
     (() => {
       "use strict";
+
+      // ───── 訂單串接設定 ─────
+      // 貼上 Google Apps Script「網頁應用程式」部署後的網址（結尾為 /exec）。
+      // 留空＝示範模式（不會送出任何資料）。設定方式見 docs/google-sheets-setup.md
+      const ORDER_API = "";
 
       const $ = selector => document.querySelector(selector);
       const money = amount => "NT$ " + amount.toLocaleString("zh-TW");
@@ -1020,6 +1033,8 @@
         if (cartCount() === 0) return;
 
         closeCart(false);
+        pendingRequestId = null;
+        setCheckoutError("");
         $("#checkoutFormWrap").classList.remove("hidden");
         $("#checkoutSuccess").classList.add("hidden");
         $("#checkoutForm").reset();
@@ -1150,14 +1165,18 @@
         });
       });
 
-      // 模擬訂單提交
-      $("#checkoutForm").addEventListener("submit", event => {
-        event.preventDefault();
+      // 訂單提交：有設定 ORDER_API 就送到 Google 試算表，否則為示範模式
+      let submitting = false;
+      let pendingRequestId = null;   // 失敗後重試沿用同一個編號，避免重複下單
 
-        if (!$("#checkoutForm").reportValidity()) return;
-
-        const orderNumber = "GC-" + Date.now().toString().slice(-8);
+      function showCheckoutSuccess(orderNumber, total) {
         $("#orderNumber").textContent = orderNumber;
+        if (typeof total === "number") {
+          $("#orderTotal").textContent = money(total);
+          $("#orderTotalLine").classList.remove("hidden");
+        } else {
+          $("#orderTotalLine").classList.add("hidden");
+        }
 
         cart = {};
         renderCart();
@@ -1165,6 +1184,79 @@
         $("#checkoutFormWrap").classList.add("hidden");
         $("#checkoutSuccess").classList.remove("hidden");
         $("#successClose").focus();
+      }
+
+      function setCheckoutError(message) {
+        const box = $("#checkoutError");
+        box.textContent = message || "";
+        box.classList.toggle("hidden", !message);
+      }
+
+      $("#checkoutForm").addEventListener("submit", async event => {
+        event.preventDefault();
+
+        if (!$("#checkoutForm").reportValidity()) return;
+        if (submitting) return;
+        setCheckoutError("");
+
+        // 示範模式
+        if (!ORDER_API) {
+          showCheckoutSuccess("GC-" + Date.now().toString().slice(-8));
+          return;
+        }
+
+        const payload = {
+          requestId: pendingRequestId || (pendingRequestId = (window.crypto && crypto.randomUUID)
+            ? crypto.randomUUID()
+            : "r" + Date.now() + Math.random().toString(36).slice(2, 10)),
+          source: window.matchMedia("(display-mode: standalone)").matches ? "pwa" : "web",
+          method: document.querySelector('input[name="method"]:checked').value,
+          name: $("#customerName").value.trim(),
+          phone: $("#customerPhone").value.trim(),
+          email: $("#customerEmail").value.trim(),
+          address: $("#customerAddress").value.trim(),
+          note: $("#orderNote").value.trim(),
+          website: $("#hpField").value,
+          items: Object.entries(cart).map(([id, qty]) => ({ id, qty }))
+        };
+
+        const button = $("#checkoutSubmit");
+        const idleLabel = button.textContent;
+        submitting = true;
+        button.disabled = true;
+        button.textContent = "送出中…";
+
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 20000);
+
+        try {
+          // 用 text/plain 可避免瀏覽器的 CORS 預檢，Apps Script 才能正常接收
+          const response = await fetch(ORDER_API, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify(payload),
+            signal: controller.signal
+          });
+          const data = await response.json();
+
+          if (!data || !data.ok) {
+            throw new Error((data && data.message) || "送出失敗，請稍後再試");
+          }
+          pendingRequestId = null;
+          showCheckoutSuccess(data.orderNumber, Number(data.total));
+        } catch (error) {
+          const message = error.name === "AbortError"
+            ? "連線逾時，請檢查網路後再按一次「送出訂單」（不會重複下單）"
+            : (error instanceof SyntaxError || error instanceof TypeError
+                ? "無法連線到訂單系統，請檢查網路後再試"
+                : error.message);
+          setCheckoutError(message);
+        } finally {
+          clearTimeout(timer);
+          submitting = false;
+          button.disabled = false;
+          button.textContent = idleLabel;
+        }
       });
 
       // 電子報示範
@@ -1177,7 +1269,9 @@
       // 隱私權說明
       $("#privacyBtn").addEventListener("click", () => {
         alert(
-          "隱私權說明：本網站為前端展示，訂單與電子報資料不會傳送至本網站伺服器，亦不會儲存於瀏覽器。外部 CDN、圖片與地圖服務可能依各自政策處理連線資料。"
+          ORDER_API
+            ? "隱私權說明：您在結帳時填寫的姓名、電話、Email、地址與備註，僅用於處理本次訂單，會傳送並儲存在店家的 Google 試算表，並可能以 Email 通知您。電子報為示範表單，不會傳送資料。外部 CDN、圖片與地圖服務可能依各自政策處理連線資料。"
+            : "隱私權說明：本網站為前端展示，訂單與電子報資料不會傳送至本網站伺服器，亦不會儲存於瀏覽器。外部 CDN、圖片與地圖服務可能依各自政策處理連線資料。"
         );
       });
 
@@ -1704,7 +1798,22 @@
         showToast("已安裝金煎所 App！");
       });
 
+      // 已設定 ORDER_API：把示範用文案改成真實訂單說明
+      function applyOrderMode() {
+        if (!ORDER_API) return;
+        $("#checkoutNotice").textContent =
+          "送出後訂單會傳給店家，我們會以您留下的電話或 Email 與您確認。聯絡資料僅用於處理本次訂單，並儲存在店家的 Google 試算表。目前不提供線上付款，付款方式由店家與您確認。";
+        $("#checkoutSubmit").textContent = "送出訂單";
+        $("#orderNumberLabel").textContent = "訂單編號";
+        $("#successNote").textContent = "我們已收到您的訂單，將以電話或 Email 與您確認，謝謝！";
+        $("#faqOrder").textContent =
+          "選擇菜單分類、加入購物車並填寫訂單資訊後送出，店家會收到訂單並與您聯絡確認。";
+        $("#faqMethod").textContent =
+          "結帳支援內用、外帶及宅配選項。目前不提供線上付款，付款與配送細節由店家與您確認。";
+      }
+
       // 初始化
+      applyOrderMode();
       if (!initCrowd3D()) initCrowd();
       $("#year").textContent = new Date().getFullYear();
       renderTabs();
